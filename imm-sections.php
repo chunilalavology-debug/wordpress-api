@@ -1307,9 +1307,10 @@ function imm_kacu_save_settings_sanitized($input) {
     $out = imm_kacu_get_settings();
     if (!is_array($input)) return $out;
 
-    $out['base_url']   = esc_url_raw($input['base_url'] ?? $out['base_url']);
-    $out['token_url']  = esc_url_raw($input['token_url'] ?? $out['token_url']);
-    $out['offers_url'] = esc_url_raw($input['offers_url'] ?? $out['offers_url']);
+    $out['base_url']     = esc_url_raw($input['base_url'] ?? $out['base_url']);
+    $out['token_url']    = esc_url_raw($input['token_url'] ?? $out['token_url']);
+    $out['offers_url']   = esc_url_raw($input['offers_url'] ?? $out['offers_url']);
+    $out['activate_url'] = esc_url_raw($input['activate_url'] ?? $out['activate_url']);
 
     $out['apikey']    = sanitize_text_field($input['apikey'] ?? $out['apikey']);
     $out['apisecret'] = sanitize_text_field($input['apisecret'] ?? $out['apisecret']);
@@ -1462,7 +1463,7 @@ add_action('admin_menu', function () {
               <hr/>
 
               <h2>Cash Back (KACU) Coupon Settings</h2>
-              <p>Fill your KACU credentials + default params for the <code>Cash Back</code> shortcode. Token + offers are fetched server-side and cached.</p>
+              <p>Fill your KACU credentials + default params for the <code>Cash Back</code> shortcode. <strong>Token</strong> uses <code>Apikey</code>, <code>ApiSecret</code>, and <code>ClientID</code> headers (not the same flow as IMM OAuth). <strong>Activate</strong> uses the bearer from that token and posts <code>OfferID</code> + <code>ShopperID</code> to Offers/Activate.</p>
               <form method="post" action="options.php">
                 <?php settings_fields('imm_sections_kacu_group'); ?>
                 <?php $k = imm_kacu_get_settings(); ?>
@@ -1482,6 +1483,13 @@ add_action('admin_menu', function () {
                   <tr>
                     <th scope="row"><label for="imm_kacu_offers_url">KACU Offers URL</label></th>
                     <td><input id="imm_kacu_offers_url" name="<?php echo esc_attr(IMM_KACU_SECTIONS_OPT); ?>[offers_url]" type="url" class="regular-text" value="<?php echo esc_attr($k['offers_url']); ?>" /></td>
+                  </tr>
+                  <tr>
+                    <th scope="row"><label for="imm_kacu_activate_url">KACU Offers Activate URL</label></th>
+                    <td>
+                      <input id="imm_kacu_activate_url" name="<?php echo esc_attr(IMM_KACU_SECTIONS_OPT); ?>[activate_url]" type="url" class="regular-text" value="<?php echo esc_attr($k['activate_url'] ?? ''); ?>" />
+                      <p class="description">Cash Back <strong>Activate Now</strong> button: <code>POST</code> with <code>Authorization: Bearer …</code> (from Token API) and form fields <code>OfferID</code>, <code>ShopperID</code>. Example: <code>https://stagingclientapi.kacu.app/API/V1.0/Offers/Activate</code></p>
+                    </td>
                   </tr>
                   <tr>
                     <th scope="row"><label for="imm_kacu_clientid">ClientID</label></th>
@@ -1613,8 +1621,6 @@ function imm_sections_get_access_token($force_refresh = false, $client_id_overri
     $token_auth_mode = strtolower((string)($s['token_auth_mode'] ?? 'body'));
     if ($token_auth_mode !== 'headers') $token_auth_mode = 'body';
 
-    $debug_token = (isset($_REQUEST['imm_clip_debug']) && (string)$_REQUEST['imm_clip_debug'] === '1');
-
     if ($token_auth_mode === 'headers') {
         // Match your curl: credentials in headers, body includes grant_type only.
         if (!empty($s['username'])) $headers[$user_field] = $s['username'];
@@ -1644,23 +1650,6 @@ function imm_sections_get_access_token($force_refresh = false, $client_id_overri
 
     // Build body as a query string to match Postman/x-www-form-urlencoded precisely.
     $body_string = http_build_query($body, '', '&', PHP_QUERY_RFC3986);
-
-    if ($debug_token) {
-        // Store debug info globally so the clip handler can include it in the response.
-        $GLOBALS['imm_sections_last_token_request_debug'] = [
-            'token_auth_mode' => $token_auth_mode,
-            'token_url' => (string)($s['token_url'] ?? ''),
-            'client_id' => (string)($s['client_id'] ?? ''),
-            'fields' => array_keys($body),
-            'has_username' => array_key_exists($user_field, $body),
-            'has_password' => array_key_exists($pass_field, $body),
-            'sent_clientid_param_name' => array_key_exists('ClientID', $body) ? 'ClientID' : '',
-            'sent_clientid_value' => (string)($s['client_id'] ?? ''),
-            'sent_grant_param_name' => $grant_field,
-            'sent_grant_value' => isset($body[$grant_field]) ? (string)$body[$grant_field] : '',
-            // Never include raw body (password) in debug.
-        ];
-    }
 
     $do_post = function(array $body_arr, array $headers_override = null) use ($s, $headers) {
         $body_string = http_build_query($body_arr, '', '&', PHP_QUERY_RFC3986);
@@ -3091,8 +3080,6 @@ add_shortcode('imm_featured_digital_offers', function ($atts) {
         var ajaxUrl = <?php echo wp_json_encode(admin_url('admin-ajax.php')); ?>;
         var clipNonce = <?php echo wp_json_encode($clip_nonce); ?>;
         var shopperId = (root.getAttribute('data-imm-shopper-id') || '').replace(/\D+/g, '');
-        var clipDebug = ((new URLSearchParams(window.location.search)).get('imm_clip_debug') || '') === '1' ? '1' : '0';
-        var showFullToken = ((new URLSearchParams(window.location.search)).get('imm_show_full_token') || '') === '1' ? '1' : '0';
 
         root.querySelectorAll('a.imm-featured-activate-btn').forEach(function (btn) {
           if (!btn || btn.dataset.immClipBound === '1') return;
@@ -3119,9 +3106,7 @@ add_shortcode('imm_featured_digital_offers', function ($atts) {
               action: 'imm_sections_clip_offer_ajax',
               nonce: clipNonce,
               coupon_id: couponId,
-              shopper_id: shopperId,
-              imm_clip_debug: clipDebug,
-              imm_show_full_token: showFullToken
+              shopper_id: shopperId
             });
 
             fetch(ajaxUrl, {
@@ -3133,7 +3118,6 @@ add_shortcode('imm_featured_digital_offers', function ($atts) {
               .then(function (r) {
                 return r.text().then(function (t) {
                   try { return JSON.parse(t); } catch (e) {
-                    console.error('IMM Featured Offers clip: non-JSON response', r.status, t.slice(0, 500));
                     return { success: false, data: { message: 'Invalid server response' } };
                   }
                 });
@@ -3152,10 +3136,6 @@ add_shortcode('imm_featured_digital_offers', function ($atts) {
                     if (typeof json.data === 'string') errMsg = json.data;
                     else if (json.data.message) errMsg = String(json.data.message);
                   }
-                  if (json && json.data && json.data.debug) {
-                    console.error('IMM Featured Offers clip debug', json.data.debug);
-                  }
-                  console.error('IMM Featured Offers clip failed', errMsg || json, json);
                   btn.innerHTML = prevHtml;
                 }
               })
@@ -3200,6 +3180,8 @@ function imm_kacu_get_settings() {
         'base_url' => 'https://stagingclientapi.kacu.app',
         'token_url' => 'https://stagingclientapi.kacu.app/API/V1.0/Token',
         'offers_url' => 'https://stagingclientapi.kacu.app/API/V1.0/Offers/All',
+        /** POST bearer + form body OfferID & ShopperID — separate from token credentials (Bearer comes from Token API). */
+        'activate_url' => 'https://stagingclientapi.kacu.app/API/V1.0/Offers/Activate',
         'apikey' => '',
         'apisecret' => '',
         'clientid' => '',
@@ -3245,33 +3227,41 @@ function imm_kacu_get_settings() {
 }
 
 function imm_kacu_get_token($force_refresh = false) {
-    $cache_key = 'imm_kacu_access_token';
-    if (!$force_refresh) {
-        $cached = get_transient($cache_key);
-        if (is_string($cached) && $cached !== '') return $cached;
-    }
-
     $s = imm_kacu_get_settings();
     if (empty($s['token_url'])) return new WP_Error('kacu_no_token_url', 'KACU token URL missing.');
     if (empty($s['apikey']) || empty($s['apisecret']) || empty($s['clientid'])) {
         return new WP_Error('kacu_missing_creds', 'KACU credentials missing in WP settings.');
     }
 
-    $res = wp_remote_post($s['token_url'], [
+    // Separate cache per token URL + ClientID + Apikey so credential changes do not reuse old tokens.
+    $cache_key = 'imm_kacu_at_' . md5((string)$s['token_url'] . '|' . (string)$s['clientid'] . '|' . (string)$s['apikey']);
+    if (!$force_refresh) {
+        $cached = get_transient($cache_key);
+        if (is_string($cached) && $cached !== '') return $cached;
+    }
+
+    /**
+     * KACU token (Cash Back only — different from IMM OAuth):
+     * POST token_url
+     * Headers: Apikey, ApiSecret, ClientID, Content-Type: application/x-www-form-urlencoded
+     * Body: grant_type=password
+     */
+    $req = [
         'timeout' => 15,
         'headers' => [
-            'Accept' => 'application/json',
-            'Apikey' => $s['apikey'],
-            'ApiSecret' => $s['apisecret'],
-            'ClientID' => $s['clientid'],
-            'User-Agent' => 'WordPress/IMM-Sections',
+            'Apikey' => (string)$s['apikey'],
+            'ApiSecret' => (string)$s['apisecret'],
+            'ClientID' => (string)$s['clientid'],
             'Content-Type' => 'application/x-www-form-urlencoded',
+            'User-Agent' => 'WordPress/IMM-Sections',
         ],
         'body' => [
             'grant_type' => 'password',
         ],
         'redirection' => 0,
-    ]);
+    ];
+    $req = apply_filters('imm_kacu_token_request', $req, $s);
+    $res = wp_remote_post($s['token_url'], $req);
 
     if (is_wp_error($res)) return $res;
     $code = wp_remote_retrieve_response_code($res);
@@ -3294,6 +3284,21 @@ function imm_kacu_get_token($force_refresh = false) {
     $ttl = max(30, $expires_in - 120);
     set_transient($cache_key, $token, $ttl);
     return $token;
+}
+
+/**
+ * Resolve KACU Offers/Activate URL (Cash Back activate button — uses Bearer from Token API).
+ */
+function imm_kacu_activate_endpoint_url() {
+    $k = imm_kacu_get_settings();
+    $u = isset($k['activate_url']) ? trim((string)$k['activate_url']) : '';
+    if ($u !== '') {
+        return esc_url_raw($u);
+    }
+    if (!empty($k['base_url'])) {
+        return esc_url_raw(rtrim((string)$k['base_url'], '/') . '/API/V1.0/Offers/Activate');
+    }
+    return 'https://stagingclientapi.kacu.app/API/V1.0/Offers/Activate';
 }
 
 add_shortcode('imm_cashback_offers', function ($atts) {
@@ -3692,8 +3697,6 @@ add_shortcode('imm_cashback_offers', function ($atts) {
         var ajaxUrl = <?php echo wp_json_encode(admin_url('admin-ajax.php')); ?>;
         var clipNonce = <?php echo wp_json_encode($clip_nonce); ?>;
         var shopperId = (root.getAttribute('data-imm-shopper-id') || '').replace(/\D+/g, '');
-        var clipDebug = ((new URLSearchParams(window.location.search)).get('imm_clip_debug') || '') === '1' ? '1' : '0';
-        var showFullToken = ((new URLSearchParams(window.location.search)).get('imm_show_full_token') || '') === '1' ? '1' : '0';
 
         root.querySelectorAll('.imm-kacu-activate-btn').forEach(function (btn) {
           if (!btn || btn.dataset.immCashbackClipBound === '1') return;
@@ -3721,9 +3724,7 @@ add_shortcode('imm_cashback_offers', function ($atts) {
               action: 'imm_kacu_activate_offer_ajax',
               nonce: clipNonce,
               coupon_id: couponId,
-              shopper_id: shopperId,
-              imm_clip_debug: clipDebug,
-              imm_show_full_token: showFullToken
+              shopper_id: shopperId
             });
 
             fetch(ajaxUrl, {
@@ -3738,10 +3739,6 @@ add_shortcode('imm_cashback_offers', function ($atts) {
                   if (card) card.classList.add('is-clipped');
                   btn.innerHTML = '<span class="icon">✓</span> Activated';
                 } else {
-                  if (json && json.data && json.data.debug) {
-                    console.error('IMM Cash Back clip debug', json.data.debug);
-                  }
-                  console.error('IMM Cash Back clip failed', json);
                   btn.innerHTML = prevHtml;
                 }
               })
@@ -4553,8 +4550,6 @@ add_shortcode('imm_advantage_rewards', function ($atts) {
         var ajaxUrl = <?php echo wp_json_encode(admin_url('admin-ajax.php')); ?>;
         var clipNonce = <?php echo wp_json_encode($clip_nonce); ?>;
         var shopperId = (root.getAttribute('data-imm-shopper-id') || '').replace(/\D+/g, '');
-        var clipDebug = ((new URLSearchParams(window.location.search)).get('imm_clip_debug') || '') === '1' ? '1' : '0';
-        var showFullToken = ((new URLSearchParams(window.location.search)).get('imm_show_full_token') || '') === '1' ? '1' : '0';
 
         root.querySelectorAll('.imm-reward-activate-btn[data-coupon-id]').forEach(function (btn) {
           if (!btn || btn.dataset.immAdvRewardClipBound === '1') return;
@@ -4582,9 +4577,7 @@ add_shortcode('imm_advantage_rewards', function ($atts) {
               action: 'imm_sections_clip_offer_ajax',
               nonce: clipNonce,
               coupon_id: couponId,
-              shopper_id: shopperId,
-              imm_clip_debug: clipDebug,
-              imm_show_full_token: showFullToken
+              shopper_id: shopperId
             });
 
             fetch(ajaxUrl, {
@@ -4601,10 +4594,6 @@ add_shortcode('imm_advantage_rewards', function ($atts) {
                   // (Button may not exist in fresh HTML, but keep this safe for cached pages.)
                   if (btn && btn.parentNode) btn.remove();
                 } else {
-                  if (json && json.data && json.data.debug) {
-                    console.error('IMM Reward Coupons clip debug', json.data.debug);
-                  }
-                  console.error('IMM Reward Coupons clip failed', json);
                   btn.innerHTML = prevHtml;
                 }
               })
@@ -5330,76 +5319,34 @@ add_action('wp_ajax_nopriv_imm_sections_clip_offer_ajax', function () {
 });
 
 add_action('wp_ajax_imm_sections_clip_offer_ajax', function () {
-    $debug_clip = (isset($_REQUEST['imm_clip_debug']) && (string)$_REQUEST['imm_clip_debug'] === '1');
-    $debug_show_full_token = ($debug_clip && isset($_REQUEST['imm_show_full_token']) && (string)$_REQUEST['imm_show_full_token'] === '1');
-    $clip_diag = [
-        'stage' => 'start',
-        'ajax_action' => 'imm_sections_clip_offer_ajax',
-    ];
-
     $nonce = isset($_POST['nonce']) ? sanitize_text_field((string)$_POST['nonce']) : '';
-    $clip_diag['nonce_present'] = ($nonce !== '');
     if (!wp_verify_nonce($nonce, 'imm_sections_clip_offer_nonce')) {
-        $resp = ['message' => 'Invalid request nonce.'];
-        if ($debug_clip) {
-            $clip_diag['stage'] = 'nonce_verify_failed';
-            $resp['debug'] = $clip_diag;
-        }
-        wp_send_json_error($resp, 403);
+        wp_send_json_error(['message' => 'Invalid request nonce.'], 403);
     }
 
     if (!is_user_logged_in()) {
-        $resp = ['message' => 'Login required.'];
-        if ($debug_clip) {
-            $clip_diag['stage'] = 'not_logged_in';
-            $resp['debug'] = $clip_diag;
-        }
-        wp_send_json_error($resp, 401);
+        wp_send_json_error(['message' => 'Login required.'], 401);
     }
 
     $coupon_id = isset($_POST['coupon_id']) ? preg_replace('/[^0-9]/', '', (string)$_POST['coupon_id']) : '';
-    $clip_diag['coupon_id_present'] = ($coupon_id !== '');
-    $clip_diag['coupon_id'] = $coupon_id;
     if ($coupon_id === '') {
-        $resp = ['message' => 'CouponID is required.'];
-        if ($debug_clip) {
-            $clip_diag['stage'] = 'coupon_missing';
-            $resp['debug'] = $clip_diag;
-        }
-        wp_send_json_error($resp, 400);
+        wp_send_json_error(['message' => 'CouponID is required.'], 400);
     }
 
     $shopper_id = imm_sections_current_shopper_id();
-    $clip_diag['shopper_from_user_meta'] = ($shopper_id !== '');
     if ($shopper_id === '' && isset($_POST['shopper_id'])) {
         $shopper_id = preg_replace('/[^0-9]/', '', (string) $_POST['shopper_id']);
-        $clip_diag['shopper_from_post'] = ($shopper_id !== '');
     }
-    $clip_diag['shopper_id'] = $shopper_id;
     if ($shopper_id === '') {
-        $resp = ['message' => 'ShopperID is required from your SSO login.'];
-        if ($debug_clip) {
-            $clip_diag['stage'] = 'shopper_missing';
-            $resp['debug'] = $clip_diag;
-        }
-        wp_send_json_error($resp, 400);
+        wp_send_json_error(['message' => 'ShopperID is required from your SSO login.'], 400);
     }
 
     $s = imm_sections_get_settings();
     $token_client_id = preg_replace('/[^0-9]/', '', (string) ($s['client_id'] ?? ''));
-    $clip_diag['token_client_id'] = $token_client_id;
-    $clip_diag['client_id_present'] = ($token_client_id !== '');
     if ($token_client_id === '') {
-        $resp = ['message' => 'ClientID is missing in Offers API Hub settings.'];
-        if ($debug_clip) {
-            $clip_diag['stage'] = 'client_missing';
-            $resp['debug'] = $clip_diag;
-        }
-        wp_send_json_error($resp, 500);
+        wp_send_json_error(['message' => 'ClientID is missing in Offers API Hub settings.'], 500);
     }
 
-    // TEMPORARY: Featured Digital Offers button token should use Tanuja credentials first,
-    // then call Coupon/Click with that bearer token.
     $clip_token_overrides = [
         'username' => 'tanuja.sharma@usa.com',
         'password' => 'tanuja@987',
@@ -5408,51 +5355,14 @@ add_action('wp_ajax_imm_sections_clip_offer_ajax', function () {
         'token_field_clientid' => 'ClientID',
         'token_field_grant' => 'grant_type',
     ];
-    // Force refresh so we always mint fresh bearer from these credentials for button clicks.
     $token = imm_sections_get_access_token(true, null, 'imm_sections_clip_access_token_v3_', $clip_token_overrides);
     if (is_wp_error($token)) {
-        $resp = ['message' => 'Unable to fetch access token.'];
-        if ($debug_clip) {
-            $clip_diag['stage'] = 'token_error';
-            $clip_diag['token_error'] = $token->get_error_message();
-            $resp['debug'] = $clip_diag;
-        }
-        wp_send_json_error($resp, 500);
+        wp_send_json_error(['message' => 'Unable to fetch access token.'], 500);
     }
 
-    $token_str = (string)$token;
-    if ($debug_clip) {
-        // Help confirm the same Bearer token used in Postman is being used here.
-        $token_preview = '';
-        if ($token_str !== '') {
-            $token_preview = substr($token_str, 0, 6) . '…' . substr($token_str, -6);
-        }
-        $clip_diag['token_username_used'] = isset($s['username']) ? (string)$s['username'] : '';
-        $clip_diag['token_preview'] = $token_preview;
-        $clip_diag['token_auth_mode'] = isset($s['token_auth_mode']) ? (string)$s['token_auth_mode'] : '';
-        $clip_diag['token_field_clientid'] = isset($s['token_field_clientid']) ? (string)$s['token_field_clientid'] : '';
-        $clip_diag['token_field_grant'] = isset($s['token_field_grant']) ? (string)$s['token_field_grant'] : '';
-        $clip_diag['token_client_id_setting'] = isset($s['client_id']) ? (string)$s['client_id'] : '';
-        $clip_diag['token_client_id_effective'] = (string)($clip_token_overrides['client_id'] ?? '');
-        $clip_diag['token_username_used'] = (string)($clip_token_overrides['username'] ?? '');
-        // Strong fingerprint to compare "same token instance" between WP and Postman without exposing token value.
-        $clip_diag['token_fingerprint_sha256_16'] = substr(hash('sha256', $token_str), 0, 16);
-        if ($debug_show_full_token) {
-            $clip_diag['token_full'] = $token_str;
-            $clip_diag['token_full_exposed'] = true;
-        }
-    }
-    // Prefer the client id encoded/attached to the token (if it's a JWT).
+    $token_str = (string) $token;
     $token_client_id_from_jwt = imm_sections_extract_client_id_from_access_token($token_str);
-    $clip_diag['token_client_id_from_jwt'] = $token_client_id_from_jwt;
-    if (isset($GLOBALS['imm_sections_last_token_request_debug']) && is_array($GLOBALS['imm_sections_last_token_request_debug'])) {
-        $clip_diag['token_request_debug'] = $GLOBALS['imm_sections_last_token_request_debug'];
-    }
 
-    // Coupon/Click ClientID can be vendor-specific and may differ from token client.
-    // Allow explicit override for Postman parity testing:
-    // - URL param: ?imm_clip_client_id=100
-    // - Filter: imm_sections_coupon_click_client_id
     $client_id = ($token_client_id_from_jwt !== '')
         ? $token_client_id_from_jwt
         : imm_sections_get_clip_client_id($token_client_id);
@@ -5461,24 +5371,16 @@ add_action('wp_ajax_imm_sections_clip_offer_ajax', function () {
         $client_id = $client_id_override;
     }
     $client_id = preg_replace('/[^0-9]/', '', (string) apply_filters('imm_sections_coupon_click_client_id', $client_id, $token_client_id, $shopper_id, $coupon_id));
-    // Temporary hard lock for parity with confirmed working Postman/curl tests.
     if ($client_id === '') {
         $client_id = '100';
     } else {
         $client_id = '100';
     }
 
-    $clip_diag['clip_client_id'] = $client_id;
-    if ($debug_clip) {
-        $clip_diag['clip_client_id_matches_token_setting'] = ($client_id === $token_client_id);
-        $clip_diag['clip_client_id_matches_token_jwt'] = ($token_client_id_from_jwt !== '' && $client_id === $token_client_id_from_jwt);
-    }
-
     $click_url = trim((string)($s['coupon_click_url'] ?? ''));
     if ($click_url === '') {
         $offers_base = trim((string)($s['offers_base'] ?? ''));
         $offers_base = imm_sections_clean_base_url($offers_base);
-        // Derive: /Offers[/All] -> /Coupon/Click
         $click_url = preg_replace('#/Offers(?:/All)?/?$#', '/Coupon/Click', $offers_base);
         if ($click_url === null || $click_url === '') {
             $click_url = rtrim($offers_base, '/') . '/Coupon/Click';
@@ -5486,19 +5388,9 @@ add_action('wp_ajax_imm_sections_clip_offer_ajax', function () {
     }
 
     if ($click_url === '') {
-        $resp = ['message' => 'Coupon Click URL missing in settings.'];
-        if ($debug_clip) {
-            $clip_diag['stage'] = 'click_url_missing';
-            $resp['debug'] = $clip_diag;
-        }
-        wp_send_json_error($resp, 400);
+        wp_send_json_error(['message' => 'Coupon Click URL missing in settings.'], 400);
     }
-    $clip_diag['click_url'] = $click_url;
 
-    // Clip Offer: per client request send ShopperID (not Email) and Bearer Authorization.
-    // For testing parity with Postman, allow explicit clipped date override:
-    // - URL param: ?imm_clip_date=03/05/2026 10:53:31 PM
-    // - Filter: imm_sections_clip_date_override
     $clipped_date_local = date('m/d/Y h:i:s A');
     $clipped_date_utc = gmdate('m/d/Y h:i:s A');
     $clipped_date_override = '';
@@ -5506,17 +5398,10 @@ add_action('wp_ajax_imm_sections_clip_offer_ajax', function () {
         $clipped_date_override = sanitize_text_field((string)$_REQUEST['imm_clip_date']);
     }
     $clipped_date_override = (string) apply_filters('imm_sections_clip_date_override', $clipped_date_override, $coupon_id, $shopper_id);
-    // Default temporary test value to match known working Postman payload.
     if ($clipped_date_override === '') {
         $clipped_date_override = '03/05/2026 10:53:31 PM';
     }
     $clipped_date = $clipped_date_override !== '' ? $clipped_date_override : $clipped_date_local;
-    if ($debug_clip) {
-        $clip_diag['clipped_date_local'] = $clipped_date_local;
-        $clip_diag['clipped_date_utc'] = $clipped_date_utc;
-        $clip_diag['clipped_date_override'] = $clipped_date_override;
-    }
-    // Lock to Postman/curl shape.
     $click_type = '1';
 
     $payload = [
@@ -5529,11 +5414,7 @@ add_action('wp_ajax_imm_sections_clip_offer_ajax', function () {
     ];
 
     $body_json = wp_json_encode($payload);
-    if ($debug_clip) {
-        $clip_diag['request_body_sha256_16'] = substr(hash('sha256', (string)$body_json), 0, 16);
-    }
 
-    // Match successful curl/Postman shape exactly, including semicolon-style blank headers.
     $blank_contact_mode = 'semicolon_blank_contact_headers';
     $headers_postman = [
         'Content-Type' => 'application/json',
@@ -5547,29 +5428,6 @@ add_action('wp_ajax_imm_sections_clip_offer_ajax', function () {
     ];
     $headers_postman = apply_filters('imm_sections_coupon_click_headers', $headers_postman, $shopper_id, $coupon_id, $s);
 
-    /** Mask Authorization for debug output (never log full bearer token). */
-    $imm_clip_headers_for_debug = function (array $hdr): array {
-        $out = [];
-        foreach ($hdr as $k => $v) {
-            if (!is_string($k)) {
-                continue;
-            }
-            if (strcasecmp($k, 'Authorization') === 0) {
-                $s = (string) $v;
-                if (preg_match('/Bearer\s+(\S+)/i', $s, $m)) {
-                    $t = $m[1];
-                    $len = strlen($t);
-                    $out[$k] = 'Bearer ***' . ($len > 8 ? (substr($t, 0, 4) . '…' . substr($t, -4)) : 'redacted');
-                } else {
-                    $out[$k] = '***redacted***';
-                }
-            } else {
-                $out[$k] = $v;
-            }
-        }
-        return $out;
-    };
-
     $do_click = function (array $hdr) use ($click_url, $body_json) {
         $use_raw_curl = (bool) apply_filters('imm_sections_coupon_click_use_raw_curl', true, $click_url, $hdr, $body_json);
         if ($use_raw_curl && function_exists('curl_init')) {
@@ -5580,8 +5438,9 @@ add_action('wp_ajax_imm_sections_clip_offer_ajax', function () {
 
             $header_lines = [];
             foreach ($hdr as $k => $v) {
-                if (!is_string($k)) continue;
-                // Match curl syntax like --header 'Email;' exactly (no colon/value).
+                if (!is_string($k)) {
+                    continue;
+                }
                 if (substr($k, -1) === ';' && (string)$v === '') {
                     $header_lines[] = $k;
                 } else {
@@ -5606,7 +5465,6 @@ add_action('wp_ajax_imm_sections_clip_offer_ajax', function () {
             $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
 
-            // Return WP_HTTP-compatible shape so wp_remote_retrieve_* keeps working.
             return [
                 'response' => ['code' => $code, 'message' => ''],
                 'body' => (string)$resp_body,
@@ -5623,109 +5481,42 @@ add_action('wp_ajax_imm_sections_clip_offer_ajax', function () {
         ]);
     };
 
-    $clip_attempt = 'postman_match_clicktype_' . $click_type;
     $headers_used = $headers_postman;
-    $clip_attempts_detail = [];
-
     $res = $do_click($headers_postman);
 
     if (is_wp_error($res)) {
-        if ($debug_clip) {
-            $clip_attempts_detail[] = [
-                'step' => 1,
-                'click_type' => $click_type,
-                'headers_sent' => $imm_clip_headers_for_debug($headers_postman),
-                'request_body_json' => $body_json,
-                'wp_error' => $res->get_error_message(),
-            ];
-            $clip_diag['clip_transport_attempts'] = $clip_attempts_detail;
-        }
-        $resp = ['message' => $res->get_error_message()];
-        if ($debug_clip) {
-            $clip_diag['stage'] = 'http_transport_error';
-            $clip_diag['clip_attempt'] = $clip_attempt;
-            $resp['debug'] = $clip_diag;
-        }
-        wp_send_json_error($resp, 500);
+        wp_send_json_error(['message' => $res->get_error_message()], 500);
     }
 
     $code = wp_remote_retrieve_response_code($res);
     $raw_body = wp_remote_retrieve_body($res);
     $json = json_decode($raw_body, true);
 
-    if ($debug_clip) {
-        $clip_attempts_detail[] = [
-            'step' => 1,
-            'click_type' => $click_type,
-            'headers_sent' => $imm_clip_headers_for_debug($headers_postman),
-            'request_body_json' => $body_json,
-            'http_status' => $code,
-            'response_body_preview' => is_string($raw_body) ? mb_substr($raw_body, 0, 2500) : '',
-        ];
-    }
-
-    // Keep request deterministic: disable ClickType fallback while matching confirmed curl shape.
     if (($code < 200 || $code >= 300) && $click_type === '1' && (bool) apply_filters('imm_sections_enable_clicktype2_retry', false)) {
         $headers_alt = $headers_postman;
         $headers_alt['ClickType'] = '2';
-        $clip_attempt = 'postman_match_then_clicktype_2';
         $headers_used = $headers_alt;
         $res2 = $do_click($headers_alt);
         if (!is_wp_error($res2)) {
-            if ($debug_clip) {
-                $clip_attempts_detail[] = [
-                    'step' => 2,
-                    'click_type' => '2',
-                    'headers_sent' => $imm_clip_headers_for_debug($headers_alt),
-                    'request_body_json' => $body_json,
-                    'http_status' => wp_remote_retrieve_response_code($res2),
-                    'response_body_preview' => mb_substr((string) wp_remote_retrieve_body($res2), 0, 2500),
-                ];
-            }
             $res = $res2;
             $code = wp_remote_retrieve_response_code($res);
             $raw_body = wp_remote_retrieve_body($res);
             $json = json_decode($raw_body, true);
-        } elseif ($debug_clip) {
-            $clip_attempts_detail[] = [
-                'step' => 2,
-                'click_type' => '2',
-                'headers_sent' => $imm_clip_headers_for_debug($headers_alt),
-                'request_body_json' => $body_json,
-                'wp_error' => $res2->get_error_message(),
-            ];
         }
     }
 
-    // If still failing, try Postman-like variants for blank contact headers:
-    // 1) empty-string values
-    // 2) omit these headers completely
     if (($code < 200 || $code >= 300) && $blank_contact_mode === 'single_space_wp_transport') {
-        // Attempt A: send empty string values
         $headers_contact_empty = $headers_used;
         $headers_contact_empty['Email'] = '';
         $headers_contact_empty['LoyaltyCard'] = '';
         $headers_contact_empty['Phone'] = '';
         $blank_contact_mode = 'empty_string_wp_transport';
-        $clip_attempt = 'postman_blank_empty_string';
 
         $resA = $do_click($headers_contact_empty);
         if (!is_wp_error($resA)) {
             $codeA = wp_remote_retrieve_response_code($resA);
             $raw_bodyA = wp_remote_retrieve_body($resA);
             $jsonA = json_decode($raw_bodyA, true);
-
-            if ($debug_clip) {
-                $clip_attempts_detail[] = [
-                    'step' => 3,
-                    'blank_contact_headers' => $blank_contact_mode,
-                    'click_type' => isset($headers_contact_empty['ClickType']) ? (string)$headers_contact_empty['ClickType'] : '',
-                    'headers_sent' => $imm_clip_headers_for_debug($headers_contact_empty),
-                    'request_body_json' => $body_json,
-                    'http_status' => $codeA,
-                    'response_body_preview' => is_string($raw_bodyA) ? mb_substr($raw_bodyA, 0, 2500) : '',
-                ];
-            }
 
             if ($codeA >= 200 && $codeA < 300) {
                 $res = $resA;
@@ -5734,34 +5525,18 @@ add_action('wp_ajax_imm_sections_clip_offer_ajax', function () {
                 $json = $jsonA;
                 $headers_used = $headers_contact_empty;
             } else {
-                // Attempt B: match curl header shape used by your example:
-                // --header 'Email;' / --header 'LoyaltyCard;' / --header 'Phone;'
-                // (curl sends these as blank-value headers; IMM can be sensitive.)
                 $headers_contact_semicolon = $headers_used;
                 unset($headers_contact_semicolon['Email'], $headers_contact_semicolon['LoyaltyCard'], $headers_contact_semicolon['Phone']);
                 $headers_contact_semicolon['Email;'] = '';
                 $headers_contact_semicolon['LoyaltyCard;'] = '';
                 $headers_contact_semicolon['Phone;'] = '';
                 $blank_contact_mode = 'semicolon_blank_contact_headers';
-                $clip_attempt = 'postman_blank_semicolon_headers';
 
                 $resB = $do_click($headers_contact_semicolon);
                 if (!is_wp_error($resB)) {
                     $codeB = wp_remote_retrieve_response_code($resB);
                     $raw_bodyB = wp_remote_retrieve_body($resB);
                     $jsonB = json_decode($raw_bodyB, true);
-
-                    if ($debug_clip) {
-                        $clip_attempts_detail[] = [
-                            'step' => 4,
-                            'blank_contact_headers' => $blank_contact_mode,
-                            'click_type' => isset($headers_contact_semicolon['ClickType']) ? (string)$headers_contact_semicolon['ClickType'] : '',
-                            'headers_sent' => $imm_clip_headers_for_debug($headers_contact_semicolon),
-                            'request_body_json' => $body_json,
-                            'http_status' => $codeB,
-                            'response_body_preview' => is_string($raw_bodyB) ? mb_substr($raw_bodyB, 0, 2500) : '',
-                        ];
-                    }
 
                     if ($codeB >= 200 && $codeB < 300) {
                         $res = $resB;
@@ -5770,12 +5545,10 @@ add_action('wp_ajax_imm_sections_clip_offer_ajax', function () {
                         $json = $jsonB;
                         $headers_used = $headers_contact_semicolon;
                     } else {
-                        // Attempt C: omit these headers entirely
                         $headers_contact_omit = $headers_used;
                         unset($headers_contact_omit['Email'], $headers_contact_omit['LoyaltyCard'], $headers_contact_omit['Phone']);
                         unset($headers_contact_omit['Email;'], $headers_contact_omit['LoyaltyCard;'], $headers_contact_omit['Phone;']);
                         $blank_contact_mode = 'omit_blank_contact_headers';
-                        $clip_attempt = 'postman_blank_omit_headers';
 
                         $resC = $do_click($headers_contact_omit);
                         if (!is_wp_error($resC)) {
@@ -5783,52 +5556,19 @@ add_action('wp_ajax_imm_sections_clip_offer_ajax', function () {
                             $raw_bodyC = wp_remote_retrieve_body($resC);
                             $jsonC = json_decode($raw_bodyC, true);
 
-                            if ($debug_clip) {
-                                $clip_attempts_detail[] = [
-                                    'step' => 5,
-                                    'blank_contact_headers' => $blank_contact_mode,
-                                    'click_type' => isset($headers_contact_omit['ClickType']) ? (string)$headers_contact_omit['ClickType'] : '',
-                                    'headers_sent' => $imm_clip_headers_for_debug($headers_contact_omit),
-                                    'request_body_json' => $body_json,
-                                    'http_status' => $codeC,
-                                    'response_body_preview' => is_string($raw_bodyC) ? mb_substr($raw_bodyC, 0, 2500) : '',
-                                ];
-                            }
-
                             $res = $resC;
                             $code = $codeC;
                             $raw_body = $raw_bodyC;
                             $json = $jsonC;
                             $headers_used = $headers_contact_omit;
-                        } elseif ($debug_clip) {
-                            $clip_attempts_detail[] = [
-                                'step' => 5,
-                                'blank_contact_headers' => $blank_contact_mode,
-                                'wp_error' => $resC->get_error_message(),
-                            ];
                         }
                     }
-                } elseif ($debug_clip) {
-                    $clip_attempts_detail[] = [
-                        'step' => 4,
-                        'blank_contact_headers' => $blank_contact_mode,
-                        'wp_error' => $resB->get_error_message(),
-                    ];
                 }
             }
-        } elseif ($debug_clip) {
-            $clip_attempts_detail[] = [
-                'step' => 3,
-                'blank_contact_headers' => $blank_contact_mode,
-                'wp_error' => $resA->get_error_message(),
-            ];
         }
     }
 
-    // If still failing, try again with ClippedDate in UTC.
-    // (We do this after header-shape retries to minimize variables.)
     if (($code < 200 || $code >= 300) && isset($clipped_date_utc) && $clipped_date_utc !== $clipped_date_local) {
-        $clip_attempt = 'postman_clippeddate_utc_retry';
         $payload_utc = [
             'Items' => [
                 [
@@ -5850,53 +5590,12 @@ add_action('wp_ajax_imm_sections_clip_offer_ajax', function () {
             $rawUTC = wp_remote_retrieve_body($resUTC);
             $jsonUTC = json_decode($rawUTC, true);
 
-            if ($debug_clip) {
-                $clip_attempts_detail[] = [
-                    'step' => count($clip_attempts_detail) + 1,
-                    'blank_contact_headers' => $blank_contact_mode ?? 'unknown',
-                    'clipped_date_mode' => 'utc',
-                    'click_type' => isset($headers_used['ClickType']) ? (string) $headers_used['ClickType'] : '',
-                    'headers_sent' => $imm_clip_headers_for_debug($headers_used),
-                    'request_body_json' => $body_json_utc,
-                    'http_status' => $codeUTC,
-                    'response_body_preview' => is_string($rawUTC) ? mb_substr($rawUTC, 0, 2500) : '',
-                ];
-            }
-
-            // Update the final variables if the UTC retry changed anything.
             $res = $resUTC;
             $code = $codeUTC;
             $raw_body = $rawUTC;
             $json = $jsonUTC;
             $body_json = $body_json_utc;
-        } elseif ($debug_clip) {
-            $clip_attempts_detail[] = [
-                'step' => count($clip_attempts_detail) + 1,
-                'blank_contact_headers' => $blank_contact_mode ?? 'unknown',
-                'clipped_date_mode' => 'utc',
-                'wp_error' => $resUTC->get_error_message(),
-            ];
         }
-    }
-
-    if ($debug_clip) {
-        $clip_diag['clip_transport_attempts'] = $clip_attempts_detail;
-        $clip_diag['client_id'] = $client_id;
-        $clip_diag['request_body_json'] = $body_json;
-        // Field-by-field contract summary for quick Postman parity check.
-        $clip_diag['request_contract'] = [
-            'method' => 'POST',
-            'url' => $click_url,
-            'shopper_id' => (string)$shopper_id,
-            'client_id' => (string)$client_id,
-            'click_type' => isset($headers_used['ClickType']) ? (string)$headers_used['ClickType'] : (string)$click_type,
-            'coupon_id' => (string)$coupon_id,
-            'clipped_date' => (string)$clipped_date,
-            'blank_contact_headers_mode' => (string)($blank_contact_mode ?? 'unknown'),
-            'header_keys_sent' => array_keys($headers_used),
-            'body_sha256_16' => isset($clip_diag['request_body_sha256_16']) ? $clip_diag['request_body_sha256_16'] : '',
-            'token_fingerprint_sha256_16' => isset($clip_diag['token_fingerprint_sha256_16']) ? $clip_diag['token_fingerprint_sha256_16'] : '',
-        ];
     }
 
     $extract_api_msg = function ($jsonBody, $raw, $default = 'Coupon click failed.') {
@@ -5928,31 +5627,20 @@ add_action('wp_ajax_imm_sections_clip_offer_ajax', function () {
     };
     $looks_already_clipped = function ($msg) {
         $m = strtolower(trim((string) $msg));
-        if ($m === '') return false;
+        if ($m === '') {
+            return false;
+        }
         return (strpos($m, 'already') !== false && (strpos($m, 'clip') !== false || strpos($m, 'activ') !== false || strpos($m, 'redeem') !== false))
             || (strpos($m, 'previously clipped') !== false)
             || (strpos($m, 'already saved') !== false);
     };
 
-    if ($debug_clip) {
-        $clip_diag['upstream_status'] = $code;
-        $clip_diag['upstream_body'] = is_string($raw_body) ? mb_substr($raw_body, 0, 2000) : '';
-        $clip_diag['blank_contact_headers'] = $blank_contact_mode ?? 'single_space_wp_transport';
-        $clip_diag['click_type_sent'] = isset($headers_used['ClickType']) ? (string) $headers_used['ClickType'] : '';
-        $clip_diag['clip_attempt'] = isset($clip_attempt) ? $clip_attempt : '';
-        $clip_diag['request_header_keys'] = array_keys($headers_used);
-    }
-
-    // Optional fallback: only try an alternate ClientID when explicitly enabled.
-    // Default: do not run extra token calls (prevents confusing token_alt_error logs).
     $alt_client_id = apply_filters('imm_sections_clip_alt_client_id', '');
     if (($code < 200 || $code >= 300) && $alt_client_id !== '') {
         $alt_client_id = preg_replace('/[^0-9]/', '', (string)$alt_client_id);
         if ($alt_client_id !== '' && (string)$token_client_id !== (string)$alt_client_id) {
             $token_alt = imm_sections_get_access_token(true, $alt_client_id);
             if (!is_wp_error($token_alt)) {
-                $clip_diag['clientid_retry_client'] = $alt_client_id;
-
                 $headers_postman_retry = $headers_postman;
                 $headers_postman_retry['Authorization'] = 'Bearer ' . (string)$token_alt;
                 $headers_postman_retry['ClientID'] = $alt_client_id;
@@ -5963,17 +5651,6 @@ add_action('wp_ajax_imm_sections_clip_offer_ajax', function () {
                     $raw_body_retry = wp_remote_retrieve_body($res_retry);
                     $json_retry = json_decode($raw_body_retry, true);
 
-                    if ($debug_clip) {
-                        $clip_attempts_detail[] = [
-                            'step' => 3,
-                            'click_type' => isset($headers_postman_retry['ClickType']) ? (string)$headers_postman_retry['ClickType'] : (string)$click_type,
-                            'headers_sent' => $imm_clip_headers_for_debug($headers_postman_retry),
-                            'request_body_json' => $body_json,
-                            'http_status' => $code_retry,
-                            'response_body_preview' => is_string($raw_body_retry) ? mb_substr($raw_body_retry, 0, 2500) : '',
-                        ];
-                    }
-
                     if ($code_retry >= 200 && $code_retry < 300) {
                         $res = $res_retry;
                         $code = $code_retry;
@@ -5982,8 +5659,6 @@ add_action('wp_ajax_imm_sections_clip_offer_ajax', function () {
                         $headers_used = $headers_postman_retry;
                     }
                 }
-            } elseif ($debug_clip) {
-                $clip_diag['token_alt_error'] = $token_alt->get_error_message();
             }
         }
     }
@@ -5991,23 +5666,13 @@ add_action('wp_ajax_imm_sections_clip_offer_ajax', function () {
     if ($code < 200 || $code >= 300) {
         $msg = $extract_api_msg($json, $raw_body, 'Coupon click failed.');
         if ($looks_already_clipped($msg)) {
-            $ok = [
+            wp_send_json_success([
                 'status' => $code,
                 'data' => is_array($json) ? $json : $raw_body,
                 'message' => $msg,
-            ];
-            if ($debug_clip) {
-                $clip_diag['stage'] = 'already_clipped_treated_success';
-                $ok['debug'] = $clip_diag;
-            }
-            wp_send_json_success($ok);
+            ]);
         }
-        $err = ['message' => $msg, 'status' => $code];
-        if ($debug_clip) {
-            $clip_diag['stage'] = 'upstream_non_2xx';
-            $err['debug'] = $clip_diag;
-        }
-        wp_send_json_error($err, $code);
+        wp_send_json_error(['message' => $msg, 'status' => $code], $code);
     }
 
     if (is_array($json)) {
@@ -6021,38 +5686,23 @@ add_action('wp_ajax_imm_sections_clip_offer_ajax', function () {
         if ($errorCodeVal !== null && (string) $errorCodeVal !== '0') {
             $msg = $extract_api_msg($json, $raw_body, 'Coupon click failed.');
             if ($looks_already_clipped($msg)) {
-                $ok = [
+                wp_send_json_success([
                     'status' => $code,
                     'data' => $json,
                     'message' => $msg,
-                ];
-                if ($debug_clip) {
-                    $clip_diag['stage'] = 'errorcode_nonzero_but_already_clipped';
-                    $ok['debug'] = $clip_diag;
-                }
-                wp_send_json_success($ok);
+                ]);
             }
-            $err = ['message' => $msg, 'errorcode' => $errorCodeVal];
-            if ($debug_clip) {
-                $clip_diag['stage'] = 'errorcode_nonzero';
-                $clip_diag['errorcode'] = (string) $errorCodeVal;
-                $err['debug'] = $clip_diag;
-            }
-            wp_send_json_error($err, 400);
+            wp_send_json_error(['message' => $msg, 'errorcode' => $errorCodeVal], 400);
         }
     }
 
-    $ok = [
+    wp_send_json_success([
         'status' => $code,
         'data' => is_array($json) ? $json : $raw_body,
         'message' => 'Coupon clipped successfully.',
-    ];
-    if ($debug_clip) {
-        $clip_diag['stage'] = 'success';
-        $ok['debug'] = $clip_diag;
-    }
-    wp_send_json_success($ok);
+    ]);
 });
+
 
 /**
  * Cashback (KACU) Activate: call KACU Offers/Activate endpoint.
@@ -6063,120 +5713,69 @@ add_action('wp_ajax_nopriv_imm_kacu_activate_offer_ajax', function () {
 });
 
 add_action('wp_ajax_imm_kacu_activate_offer_ajax', function () {
-    $debug_clip = (isset($_REQUEST['imm_clip_debug']) && (string)$_REQUEST['imm_clip_debug'] === '1');
-    $diag = [
-        'stage' => 'start',
-        'ajax_action' => 'imm_kacu_activate_offer_ajax',
-    ];
-
     $nonce = isset($_POST['nonce']) ? sanitize_text_field((string)$_POST['nonce']) : '';
-    $diag['nonce_present'] = ($nonce !== '');
     if (!wp_verify_nonce($nonce, 'imm_sections_clip_offer_nonce')) {
-        $diag['stage'] = 'nonce_verify_failed';
-        wp_send_json_error([
-            'message' => 'Invalid request nonce.',
-            'debug' => $debug_clip ? $diag : null,
-        ], 403);
+        wp_send_json_error(['message' => 'Invalid request nonce.'], 403);
     }
 
     if (!is_user_logged_in()) {
-        $diag['stage'] = 'not_logged_in';
-        wp_send_json_error([
-            'message' => 'Login required.',
-            'debug' => $debug_clip ? $diag : null,
-        ], 401);
+        wp_send_json_error(['message' => 'Login required.'], 401);
     }
 
     $coupon_id = isset($_POST['coupon_id']) ? preg_replace('/[^0-9]/', '', (string)$_POST['coupon_id']) : '';
-    $diag['coupon_id_present'] = ($coupon_id !== '');
-    $diag['coupon_id'] = $coupon_id;
     if ($coupon_id === '') {
-        wp_send_json_error([
-            'message' => 'CouponID is required.',
-            'debug' => $debug_clip ? ($diag + ['stage' => 'coupon_missing']) : null,
-        ], 400);
+        wp_send_json_error(['message' => 'CouponID is required.'], 400);
     }
 
     $shopper_id = isset($_POST['shopper_id']) ? preg_replace('/[^0-9]/', '', (string)$_POST['shopper_id']) : '';
-    $diag['shopper_id_present'] = ($shopper_id !== '');
-    $diag['shopper_id'] = $shopper_id;
     if ($shopper_id === '') {
-        wp_send_json_error([
-            'message' => 'ShopperID is required.',
-            'debug' => $debug_clip ? ($diag + ['stage' => 'shopper_missing']) : null,
-        ], 400);
+        wp_send_json_error(['message' => 'ShopperID is required.'], 400);
     }
 
     $kacu = imm_kacu_get_settings();
     $token = imm_kacu_get_token(false);
     if (is_wp_error($token)) {
-        wp_send_json_error([
-            'message' => 'Unable to fetch KACU token.',
-            'debug' => $debug_clip ? ($diag + ['token_error' => $token->get_error_message()]) : null,
-        ], 500);
+        wp_send_json_error(['message' => 'Unable to fetch KACU token.'], 500);
     }
 
-    $endpoint = '';
-    if (!empty($kacu['base_url'])) {
-        $endpoint = rtrim((string)$kacu['base_url'], '/') . '/API/V1.0/Offers/Activate';
-    }
-    if ($endpoint === '') {
-        $endpoint = 'https://stagingclientapi.kacu.app/API/V1.0/Offers/Activate';
-    }
-    $diag['click_url'] = $endpoint;
+    $endpoint = imm_kacu_activate_endpoint_url();
 
-    // Match provided working curl for KACU Activate:
-    // --data-urlencode 'OfferID=...'
-    // --data-urlencode 'ShopperID=...'
     $body_arr = [
         'OfferID' => (string)$coupon_id,
         'ShopperID' => (string)$shopper_id,
     ];
 
     $body_arr = apply_filters('imm_kacu_activate_body', $body_arr, $coupon_id, $shopper_id, $kacu);
-    $diag['body_fields'] = array_keys($body_arr);
 
-    $res = wp_remote_post($endpoint, [
+    $activate_req = [
         'timeout' => 20,
         'headers' => [
-            'Accept' => 'application/json',
-            'Accept-Language' => 'en-us',
             'Authorization' => 'Bearer ' . (string)$token,
+            'Accept-Language' => 'en-us',
             'Content-Type' => 'application/x-www-form-urlencoded',
             'User-Agent' => 'WordPress/IMM-Sections',
         ],
         'body' => http_build_query($body_arr, '', '&', PHP_QUERY_RFC3986),
         'redirection' => 0,
-    ]);
+    ];
+    $activate_req = apply_filters('imm_kacu_activate_request', $activate_req, $endpoint, $coupon_id, $shopper_id, $kacu);
+    $res = wp_remote_post($endpoint, $activate_req);
 
     if (is_wp_error($res)) {
-        if ($debug_clip) $diag['wp_error'] = $res->get_error_message();
-        wp_send_json_error([
-            'message' => $res->get_error_message(),
-            'debug' => $debug_clip ? $diag : null,
-        ], 500);
+        wp_send_json_error(['message' => $res->get_error_message()], 500);
     }
 
     $status = wp_remote_retrieve_response_code($res);
     $raw = wp_remote_retrieve_body($res);
     $json = json_decode($raw, true);
 
-    if ($debug_clip) {
-        $diag['upstream_status'] = $status;
-        $diag['upstream_body_preview'] = is_string($raw) ? mb_substr($raw, 0, 2000) : '';
-    }
-
     if ($status < 200 || $status >= 300) {
-        wp_send_json_error([
-            'message' => 'KACU Offers/Activate failed.',
-            'debug' => $debug_clip ? $diag : null,
-        ], $status);
+        wp_send_json_error(['message' => 'KACU Offers/Activate failed.'], $status);
     }
 
     wp_send_json_success([
         'status' => $status,
         'data' => is_array($json) ? $json : $raw,
-        'debug' => $debug_clip ? $diag : null,
     ]);
 });
 
