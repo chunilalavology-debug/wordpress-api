@@ -1,0 +1,425 @@
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap');
+
+  /* IMPORTANT:
+   * This HTML can be pasted into pages. Do NOT use global selectors here
+   * because they will affect the whole website.
+   * (We removed the global `*` reset and scoped key selectors under
+   * `.everyday-savings`.)
+   */
+
+  .featured-digital-offer {
+    background: transparent;
+    padding: 64px 0;
+  }
+
+  .everyday-savings .container {
+    width: 100%;
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 0 15px;
+  }
+
+  .everyday-savings .featured-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 22px;
+  }
+
+  .everyday-savings .featured-heading h2 {
+    color: #11385c;
+    text-align: left;
+    font-size: 32px;
+    line-height: 32px;
+    font-family: "Poppins", sans-serif;
+    font-weight: 600;
+  }
+
+  .everyday-savings .featured-offer-btn a {
+    color: #11385c;
+    text-align: center;
+    font-size: 16px;
+    line-height: 16px;
+    letter-spacing: 0.8px;
+    font-weight: 700;
+    text-decoration: none;
+    font-family: "DM Sans", sans-serif;
+  }
+
+  .everyday-savings .featured-digital-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 30px;
+    align-items: center;
+  }
+
+  .featured-img {
+    position: relative;
+    height: 100%;
+  }
+
+  .featured-content-over {
+    position: absolute;
+    bottom: 36px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    width: 100%;
+  }
+
+  .bg-white-box {
+    background: #ffffff;
+    border-radius: 12px;
+    border-style: solid;
+    border-color: rgba(17, 57, 93, 0.2);
+    border-width: 1px;
+    padding: 18px 13px;
+  }
+
+  .coupon-box {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .coupon-box .label {
+    background: #797951;
+    border-radius: 32px;
+    color: #ffffff;
+    text-align: left;
+    padding: 5px 15px;
+    font-size: 13px;
+    line-height: 19.2px;
+    font-weight: 400;
+    font-family: "DM Sans", sans-serif;
+  }
+
+  .featured-digitalimg img {
+    border-radius: 16px;
+    max-width: 270px;
+    height: 172px;
+    object-fit: contain;
+    width: 100%;
+  }
+
+  .featured-digitalimg-content .items-text {
+    color: #6c6c6c;
+    text-align: left;
+    font-family: "Poppins", sans-serif;
+    font-size: 16px;
+    font-weight: 400;
+    margin-bottom: 11px;
+    display: inline-block;
+  }
+
+  .featured-digitalimg-content h3 {
+    color: #11385c;
+    text-align: left;
+    font-family: "Poppins", sans-serif;
+    font-size: 18px;
+    line-height: 24px;
+    font-weight: 600;
+  }
+
+  .price-main .currency {
+    color: #11385c;
+    font-family: "Poppins", sans-serif;
+    font-size: 34px;
+    font-weight: 700;
+  }
+
+  .price-dollars {
+    color: #11385c;
+    text-align: center;
+    font-family: "Poppins", sans-serif;
+    font-size: 54px;
+    font-weight: 700;
+  }
+
+  .price-cents {
+    color: #11385c;
+    text-align: center;
+    font-family: "Poppins", sans-serif;
+    font-size: 34px;
+    font-weight: 700;
+  }
+
+  .featured-content-over h3 {
+    color: #feffff;
+    font-family: "Poppins", sans-serif;
+    font-size: 18px;
+    line-height: 118.7%;
+    font-weight: 700;
+  }
+
+  .featured-digital-box {
+    height: 100%;
+  }
+
+  .featured-digital-card {
+    height: 100%;
+  }
+
+  .featured-img img {
+    height: 100%;
+  }
+
+  .price-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .price-discount span {
+    display: block;
+    font-family: "DM Sans", sans-serif;
+    font-size: 19px;
+    line-height: 32px;
+    font-weight: 400;
+  }
+
+  .original-price {
+    color: #6a7283;
+  }
+
+  .discount-amount {
+    color: #b86028;
+  }
+
+  .btn-content-cst {
+    display: block;
+    border-style: dashed;
+    border-color: transparent;
+    border-width: 1px;
+    background: #11385c;
+    padding: 13px 65px;
+    color: #ffffff;
+    text-align: center;
+    font-family: "DM Sans", sans-serif;
+    font-size: 16px;
+    line-height: 16px;
+    font-weight: 500;
+    text-decoration: none;
+    border-radius: 100px;
+    position: relative;
+    overflow: hidden;
+    z-index: 1;
+    transition: all 0.3s;
+  }
+
+  .btn-content-cst::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: #1f3b5b;
+    border-radius: 30px;
+    transition: all 0.4s ease;
+    z-index: -1;
+  }
+
+  .btn-content-cst::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    height: 100%;
+    width: 60px;
+    background: white;
+    clip-path: polygon(30% 0, 100% 0, 100% 100%, 0% 100%);
+    transition: all 0.4s ease;
+    z-index: -1;
+  }
+
+  .btn-content-cst:hover::after {
+    width: 100%;
+    clip-path: none;
+  }
+
+  .btn-content-cst:hover {
+    color: #11385c;
+    border-color: #11385c;
+  }
+
+  /* Everyday Savings overrides */
+  .everyday-savings {
+    padding: 65px 0;
+    background: transparent;
+  }
+
+  .everyday-savings .btn-content-cst::after,
+  .everyday-savings .btn-content-cst::before {
+    display: none;
+  }
+
+  .everyday-savings .btn-content-cst {
+    border-radius: 100px;
+    border-style: dashed;
+    border-color: #11385c;
+    border-width: 1px;
+    background: transparent;
+    color: #11385c;
+  }
+
+  .everyday-savings .btn-content-cst:hover {
+    background: #11385c;
+    color: #ffffff;
+  }
+
+  .featured-digitalimg-content p {
+    color: #6a7283;
+    text-align: left;
+    font-size: 19px;
+    font-weight: 400;
+    margin-top: 4px;
+    margin-bottom: 11px;
+    font-family: "DM Sans", sans-serif;
+  }
+
+  .everyday-savings .featured-digital-card {
+    height: auto;
+  }
+
+  /* Advantage Rewards tweaks (kept here for reuse) */
+  .advantage-rewards .featured-digitalimg-content p {
+    color: #6a7283;
+    text-align: left;
+    font-size: 17px;
+    font-weight: 400;
+    margin-top: 4px;
+    margin-bottom: 11px;
+    font-family: "DM Sans", sans-serif;
+  }
+
+  .advantage-rewards .dozen-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .advantage-rewards .dozen-btn span {
+    color: #11385c;
+    font-size: 18px;
+    line-height: 24px;
+    font-weight: 600;
+    font-family: "Poppins", sans-serif;
+  }
+
+  .advantage-rewards .dozen-btn .btn-content-cst {
+    width: auto !important;
+    display: inline-block !important;
+    padding: 13px 18px;
+    background: #11385c;
+    color: #ffffff;
+  }
+
+  .advantage-rewards .dozen-btn .btn-content-cst:hover {
+    background: transparent;
+    color: #11385c;
+  }
+</style>
+
+<section class="everyday-savings">
+    <div class="container">
+      <div class="featured-header">
+        <div class="featured-heading">
+          <h2>Everyday Savings</h2>
+        </div>
+        <div class="featured-offer-btn">
+          <a href="#">See All Deals
+            <span><svg width="14" height="12" viewBox="0 0 14 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M8.272 0.200309L13.776 5.44831C13.9253 5.59764 14 5.77898 14 5.99231C14 6.20564 13.9253 6.38698 13.776 6.53631L8.272 11.7843C8.12267 11.923 7.944 11.9923 7.736 11.9923C7.528 11.9923 7.352 11.9176 7.208 11.7683C7.064 11.619 6.99467 11.4376 7 11.2243C7.00533 11.011 7.08267 10.835 7.232 10.6963L11.376 6.74431H0.752C0.549333 6.74431 0.373333 6.66964 0.224 6.52031C0.0746667 6.37098 0 6.19231 0 5.98431C0 5.77631 0.0746667 5.60031 0.224 5.45631C0.373333 5.31231 0.549333 5.24031 0.752 5.24031H11.376L7.232 1.28831C7.08267 1.14964 7.00533 0.976309 7 0.768309C6.99467 0.560309 7.064 0.381642 7.208 0.232309C7.352 0.0829757 7.52267 0.00564233 7.72 0.000309001C7.91733 -0.00502433 8.10133 0.0616423 8.272 0.200309Z"
+                  fill="#11385C" />
+              </svg>
+            </span>
+          </a>
+        </div>
+      </div>
+      <div class="featured-digital-grid">
+        <div class="featured-digital-card">
+          <div class="featured-digital-box">
+            <div class="featured-img">
+              <img src="images/everyday.png" alt="everyday">
+
+            </div>
+
+          </div>
+        </div>
+        <div class="featured-digital-card bg-white-box">
+          <div class="featured-digital-box">
+            <div class="coupon-box">
+              <span class="label">Digital Coupon</span>
+              <span class=""><svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                  xmlns="http://www.w3.org/2000/svg">
+                  <path
+                    d="M20.9066 5.3445C19.8877 4.32811 18.5077 3.75655 17.0685 3.75479C15.6294 3.75303 14.248 4.32123 13.2266 5.33512L12.0004 6.47419L10.7732 5.33137C9.752 4.31307 8.36814 3.74212 6.92602 3.74415C5.48389 3.74617 4.10163 4.32099 3.08333 5.34216C2.06502 6.36332 1.49408 7.74718 1.4961 9.18931C1.49812 10.6314 2.07294 12.0137 3.09411 13.032L11.4707 21.5314C11.5405 21.6022 11.6236 21.6585 11.7154 21.6969C11.8071 21.7353 11.9056 21.7551 12.005 21.7551C12.1045 21.7551 12.203 21.7353 12.2947 21.6969C12.3864 21.6585 12.4696 21.6022 12.5394 21.5314L20.9066 13.032C21.9256 12.0124 22.4981 10.6298 22.4981 9.18825C22.4981 7.74669 21.9256 6.36414 20.9066 5.3445ZM19.8425 11.9782L12.0004 19.932L4.15348 11.9707C3.41502 11.2323 3.00016 10.2307 3.00016 9.18637C3.00016 8.14203 3.41502 7.14046 4.15348 6.402C4.89195 5.66354 5.89352 5.24867 6.93786 5.24867C7.9822 5.24867 8.98377 5.66354 9.72223 6.402L9.74098 6.42075L11.4894 8.04731C11.6282 8.17647 11.8108 8.24827 12.0004 8.24827C12.1899 8.24827 12.3725 8.17647 12.5113 8.04731L14.2597 6.42075L14.2785 6.402C15.0174 5.66403 16.0193 5.24985 17.0636 5.25055C18.108 5.25125 19.1093 5.66679 19.8472 6.40575C20.5852 7.14471 20.9994 8.14656 20.9987 9.1909C20.998 10.2352 20.5824 11.2365 19.8435 11.9745L19.8425 11.9782Z"
+                    fill="#11385C" />
+                </svg>
+              </span>
+            </div>
+            <div class="featured-digitalimg">
+              <img src="images/product1.png" alt="product">
+            </div>
+            <div class="featured-digitalimg-content">
+              <h3>Buy 2 Save $5</h3>
+              <p>When you buy TWO(2) Pillsbury™ Refrigerated or ...</p>
+              <a href="#" class="btn-content-cst">
+                <span class="icon">✓</span> Activate Now
+              </a>
+            </div>
+          </div>
+        </div>
+        <div class="featured-digital-card bg-white-box">
+          <div class="featured-digital-box">
+            <div class="coupon-box">
+              <span class="label">Digital Coupon</span>
+              <span class=""><svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                  xmlns="http://www.w3.org/2000/svg">
+                  <path
+                    d="M20.9066 5.3445C19.8877 4.32811 18.5077 3.75655 17.0685 3.75479C15.6294 3.75303 14.248 4.32123 13.2266 5.33512L12.0004 6.47419L10.7732 5.33137C9.752 4.31307 8.36814 3.74212 6.92602 3.74415C5.48389 3.74617 4.10163 4.32099 3.08333 5.34216C2.06502 6.36332 1.49408 7.74718 1.4961 9.18931C1.49812 10.6314 2.07294 12.0137 3.09411 13.032L11.4707 21.5314C11.5405 21.6022 11.6236 21.6585 11.7154 21.6969C11.8071 21.7353 11.9056 21.7551 12.005 21.7551C12.1045 21.7551 12.203 21.7353 12.2947 21.6969C12.3864 21.6585 12.4696 21.6022 12.5394 21.5314L20.9066 13.032C21.9256 12.0124 22.4981 10.6298 22.4981 9.18825C22.4981 7.74669 21.9256 6.36414 20.9066 5.3445ZM19.8425 11.9782L12.0004 19.932L4.15348 11.9707C3.41502 11.2323 3.00016 10.2307 3.00016 9.18637C3.00016 8.14203 3.41502 7.14046 4.15348 6.402C4.89195 5.66354 5.89352 5.24867 6.93786 5.24867C7.9822 5.24867 8.98377 5.66354 9.72223 6.402L9.74098 6.42075L11.4894 8.04731C11.6282 8.17647 11.8108 8.24827 12.0004 8.24827C12.1899 8.24827 12.3725 8.17647 12.5113 8.04731L14.2597 6.42075L14.2785 6.402C15.0174 5.66403 16.0193 5.24985 17.0636 5.25055C18.108 5.25125 19.1093 5.66679 19.8472 6.40575C20.5852 7.14471 20.9994 8.14656 20.9987 9.1909C20.998 10.2352 20.5824 11.2365 19.8435 11.9745L19.8425 11.9782Z"
+                    fill="#11385C" />
+                </svg>
+              </span>
+            </div>
+            <div class="featured-digitalimg">
+              <img src="images/product1.png" alt="product">
+            </div>
+            <div class="featured-digitalimg-content">
+              <h3>Buy 2 Save $5</h3>
+              <p>When you buy TWO(2) Pillsbury™ Refrigerated or ...</p>
+              <a href="#" class="btn-content-cst">
+                <span class="icon">✓</span> Activate Now
+              </a>
+            </div>
+          </div>
+        </div>
+        <div class="featured-digital-card bg-white-box">
+          <div class="featured-digital-box">
+            <div class="coupon-box">
+              <span class="label">Digital Coupon</span>
+              <span class=""><svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                  xmlns="http://www.w3.org/2000/svg">
+                  <path
+                    d="M20.9066 5.3445C19.8877 4.32811 18.5077 3.75655 17.0685 3.75479C15.6294 3.75303 14.248 4.32123 13.2266 5.33512L12.0004 6.47419L10.7732 5.33137C9.752 4.31307 8.36814 3.74212 6.92602 3.74415C5.48389 3.74617 4.10163 4.32099 3.08333 5.34216C2.06502 6.36332 1.49408 7.74718 1.4961 9.18931C1.49812 10.6314 2.07294 12.0137 3.09411 13.032L11.4707 21.5314C11.5405 21.6022 11.6236 21.6585 11.7154 21.6969C11.8071 21.7353 11.9056 21.7551 12.005 21.7551C12.1045 21.7551 12.203 21.7353 12.2947 21.6969C12.3864 21.6585 12.4696 21.6022 12.5394 21.5314L20.9066 13.032C21.9256 12.0124 22.4981 10.6298 22.4981 9.18825C22.4981 7.74669 21.9256 6.36414 20.9066 5.3445ZM19.8425 11.9782L12.0004 19.932L4.15348 11.9707C3.41502 11.2323 3.00016 10.2307 3.00016 9.18637C3.00016 8.14203 3.41502 7.14046 4.15348 6.402C4.89195 5.66354 5.89352 5.24867 6.93786 5.24867C7.9822 5.24867 8.98377 5.66354 9.72223 6.402L9.74098 6.42075L11.4894 8.04731C11.6282 8.17647 11.8108 8.24827 12.0004 8.24827C12.1899 8.24827 12.3725 8.17647 12.5113 8.04731L14.2597 6.42075L14.2785 6.402C15.0174 5.66403 16.0193 5.24985 17.0636 5.25055C18.108 5.25125 19.1093 5.66679 19.8472 6.40575C20.5852 7.14471 20.9994 8.14656 20.9987 9.1909C20.998 10.2352 20.5824 11.2365 19.8435 11.9745L19.8425 11.9782Z"
+                    fill="#11385C" />
+                </svg>
+              </span>
+            </div>
+            <div class="featured-digitalimg">
+              <img src="images/product1.png" alt="product">
+            </div>
+            <div class="featured-digitalimg-content">
+              <h3>Buy 2 Save $5</h3>
+              <p>When you buy TWO(2) Pillsbury™ Refrigerated or ...</p>
+              <a href="#" class="btn-content-cst">
+                <span class="icon">✓</span> Activate Now
+              </a>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
